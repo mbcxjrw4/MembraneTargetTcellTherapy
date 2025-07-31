@@ -46,7 +46,7 @@ sheet <- merge(sheet, predictions, by = c("Gene ID", "Gene"), all.x = T)
 sheet <- merge(sheet, textmining, by = c("Gene ID", "Gene"), all.x = T)
 
 # Result output
-filename <- paste0("results/membrane_target_candidates.csv")
+filename <- paste0("data/processed/membrane_target_candidates.csv")
 if(!exists(filename)){
     data.table::fwrite(sheet, file=filename)
 }
