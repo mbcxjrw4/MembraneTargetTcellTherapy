@@ -1,5 +1,0 @@
-source("scripts/01_select_membrane_targets.R")
-source("scripts/02_extract_expression_data.R")
-source("scripts/03_define_tissue_risk_and_filter.R")
-source("scripts/04_apply_safety_filters.R")
-source("scripts/05_visualize_overview.R")
