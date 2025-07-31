@@ -1,0 +1,376 @@
+---
+title: "Target Discovery"
+
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = paste0(substr(inputFile, 1, nchar(inputFile)-4), "_Report.html")) })
+
+output: 
+    html_document:
+        code_folding: hide
+        toc: true
+        toc_float: true
+        fig_caption: true
+        
+params:
+    target: "CT83"
+
+---
+##### Author: `r gsub("\\.", " ", Sys.getenv("USER"))`
+##### Date: `r Sys.Date()`
+***
+
+```{r, echo=FALSE}
+time.stamp <- strftime(Sys.time(), "%Y%b%d_%H%M%S")
+target <- as.character(params$target)
+```
+
+## **Objective**
+To show potential membrane target expression on normal and tumour tissue
+
+## Import libraries and data {.tabset}
+
+### Import libraries
+A set of R libraries are imported for the use of further analysis.
+
+```{r, warning=FALSE, message=FALSE}
+library(Cairo)
+library(cowplot)
+library(data.table)
+library(ggplot2)
+library(grid)
+library(scales)
+library(tools)
+```
+
+### Import data
+TSV file of integrated RNAseq data are brought into R.
+```{r, message=F}
+file2 <- "data/processed/TCGA_GTEX_integrated_membrane_target.txt"
+rna <- data.table::fread(file=file2, check.names=FALSE, stringsAsFactors=F)
+```
+
+| Data file       | `r file2`                                                              |
+|-----------------|------------------------------------------------------------------------|
+| Last modified:  | `r strftime(file.mtime(paste0(filePath2, file2)), "%d-%b-%Y %H:%M:%S")`|
+
+CSV file of % prevalence of potential target expression above 10 TPM in tumours and normal tissues are brought into R.
+```{r, message=F}
+file1 <- "data/processed/freq_above_hard_cutoff.csv"
+prevalence1 <- data.table::fread(file=file1, check.names=FALSE, stringsAsFactors=F)
+```
+
+| Data file       | `r file1`                                                              |
+|-----------------|------------------------------------------------------------------------|
+| Last modified:  | `r strftime(file.mtime(paste0(filePath1, file1)), "%d-%b-%Y %H:%M:%S")`|
+
+CSV file of % prevalence of potential target expression above target-specific threshold in tumours and normal tissues are brought into R.
+```{r, message=F}
+file4 <- "data/processed/freq_above_target_specific_cutoff.csv"
+prevalence2 <- data.table::fread(file=file4, check.names=FALSE, stringsAsFactors=F)
+```
+
+| Data file       | `r file4`                                                              |
+|-----------------|------------------------------------------------------------------------|
+| Last modified:  | `r strftime(file.mtime(paste0(filePath4, file4)), "%d-%b-%Y %H:%M:%S")`|
+
+## `r target` expression {.tabset}
+### Data pre-processing
+Data for `r target` expression
+```{r}
+rna <- rna[, c("Sample.ID", "type", "tissue.cancer", target), with = F]
+data.table::setnames(rna, old = target, new = "TPM")
+rna[, TPM := (2^TPM - 0.001)]
+```
+
+### Distribution on normal and tumour tissues
+```{r, fig.width=8, fig.height=6}
+fig1 <- ggplot(data=rna, aes(x=(TPM), fill=type))+
+        geom_histogram(position = "dodge", bins=20)+
+        labs(fill="", x="TPM")+
+        # scale_x_log10(labels = comma)+
+        ggtitle(paste(target, "expression"))+
+        theme_bw()+
+        theme(plot.title = element_text(hjust = 0.5),
+              axis.text.y = element_text(size=10),
+              legend.position = "bottom",
+              plot.margin = unit(c(5,5,5,5), "mm"))
+
+fig1
+```
+
+### Normal tissue
+normal tissue risk categories
+```{r}
+high <- c("Adipose Tissue", "Blood", "Blood Vessel", "Soft tissue/Bone", "Brain", "Esophagus", "Eye", "Heart", "Liver", "Lung", "Lymphatic tissue", "Muscle", "Nerve", "Paraganglia", "Small Intestine", "White blood cell")
+ 
+medium <- c("Adrenal Gland", "Bladder", "Colon", "Kidney", "Pancreas", "Pituitary", "Stomach", "Skin")
+
+low <- c("Breast", "Cervix", "Fallopian Tube", "Ovary", "Salivary Gland", "Prostate", "Rectum", "Spleen", "Thymus", "Thyroid", "Uterus", "Endometrium", "Vagina")
+
+immunoprivileged <- c("Testis")
+
+tbd <- c("Lining of body cavities", "Bile duct", "Head and Neck region") 
+
+normal <- rna[type=="normal"]
+
+normal[, Risk := fifelse(tissue.cancer%in%high, "high", fifelse(tissue.cancer%in%medium, "medium", fifelse(tissue.cancer%in%low, "low", fifelse(tissue.cancer%in%immunoprivileged, "Immunoprivileged", "TBD"))))]
+
+temp <- normal[, list(TPM_median=median(TPM, na.rm = T)), by=list(tissue.cancer)]
+
+normal[, Risk := factor(Risk, levels=c("low", "medium", "high", "Immunoprivileged"))]
+
+normal[, tissue.cancer := factor(tissue.cancer, levels=temp$tissue.cancer[order(temp$TPM_median)])]
+```
+
+```{r, echo = F}
+cutoff <- prevalence2$Cutoff[prevalence2$Gene == target]
+
+prevalence2[, Cutoff := NULL]
+
+prevalence2 <- data.table::melt(prevalence2, id.vars = c("Gene"), variable.name = "tissue.cancer", value.name = "value")
+
+prevalence2 <- data.table::dcast(prevalence2, tissue.cancer~Gene, value.var = "value")
+
+prevalence2[tissue.cancer == "acute myeloid leukemia", tissue.cancer := "LAML"]
+prevalence2[tissue.cancer == "adrenocortical cancer", tissue.cancer := "ACC"]
+prevalence2[tissue.cancer == "bladder urothelial carcinoma", tissue.cancer := "BLCA"]
+prevalence2[tissue.cancer == "brain lower grade glioma", tissue.cancer := "LGG"]
+prevalence2[tissue.cancer == "breast invasive carcinoma", tissue.cancer := "BRCA"]
+prevalence2[tissue.cancer == "cervical & endocervical cancer", tissue.cancer := "CESC"]
+prevalence2[tissue.cancer == "cholangiocarcinoma", tissue.cancer := "CHOL"]
+prevalence2[tissue.cancer == "chronic myelogenous leukemia", tissue.cancer := "LCML"]
+prevalence2[tissue.cancer == "colon adenocarcinoma", tissue.cancer := "COAD"]
+prevalence2[tissue.cancer == "controls", tissue.cancer := "CNTL"]
+prevalence2[tissue.cancer == "esophageal carcinoma", tissue.cancer := "ESCA"]
+prevalence2[tissue.cancer == "glioblastoma multiforme", tissue.cancer := "GBM"]
+prevalence2[tissue.cancer == "head & neck squamous cell carcinoma", tissue.cancer := "HNSC"]
+prevalence2[tissue.cancer == "kidney chromophobe", tissue.cancer := "KICH"]
+prevalence2[tissue.cancer == "kidney clear cell carcinoma", tissue.cancer := "KIRC"]
+prevalence2[tissue.cancer == "kidney papillary cell carcinoma", tissue.cancer := "KIRP"]
+prevalence2[tissue.cancer == "liver hepatocellular carcinoma", tissue.cancer := "LIHC"]
+prevalence2[tissue.cancer == "lung adenocarcinoma", tissue.cancer := "LUAD"]
+prevalence2[tissue.cancer == "lung squamous cell carcinoma", tissue.cancer := "LUSC"]
+prevalence2[tissue.cancer == "diffuse large B-cell lymphoma", tissue.cancer := "DLBC"]
+prevalence2[tissue.cancer == "mesothelioma", tissue.cancer := "MESO"]
+prevalence2[tissue.cancer == "miscellaneous", tissue.cancer := "MISC"]
+prevalence2[tissue.cancer == "ovarian serous cystadenocarcinoma", tissue.cancer := "OV"]
+prevalence2[tissue.cancer == "pancreatic adenocarcinoma", tissue.cancer := "PAAD"]
+prevalence2[tissue.cancer == "pheochromocytoma & paraganglioma", tissue.cancer := "PCPG"]
+prevalence2[tissue.cancer == "prostate adenocarcinoma", tissue.cancer := "PRAD"]
+prevalence2[tissue.cancer == "rectum adenocarcinoma", tissue.cancer := "READ"]
+prevalence2[tissue.cancer == "sarcoma", tissue.cancer := "SARC"]
+prevalence2[tissue.cancer == "skin cutaneous melanoma", tissue.cancer := "SKCM"]
+prevalence2[tissue.cancer == "stomach adenocarcinoma", tissue.cancer := "STAD"]
+prevalence2[tissue.cancer == "testicular germ cell tumor", tissue.cancer := "TGCT"]
+prevalence2[tissue.cancer == "thymoma", tissue.cancer := "THYM"]
+prevalence2[tissue.cancer == "thyroid carcinoma", tissue.cancer := "THCA"]
+prevalence2[tissue.cancer == "uterine carcinosarcoma", tissue.cancer := "UCS"]
+prevalence2[tissue.cancer == "uterine corpus endometrioid carcinoma", tissue.cancer := "UCEC"]
+prevalence2[tissue.cancer == "uveal melanoma", tissue.cancer := "UVM"]
+
+prevalence1[tissue.cancer == "acute myeloid leukemia", tissue.cancer := "LAML"]
+prevalence1[tissue.cancer == "adrenocortical cancer", tissue.cancer := "ACC"]
+prevalence1[tissue.cancer == "bladder urothelial carcinoma", tissue.cancer := "BLCA"]
+prevalence1[tissue.cancer == "brain lower grade glioma", tissue.cancer := "LGG"]
+prevalence1[tissue.cancer == "breast invasive carcinoma", tissue.cancer := "BRCA"]
+prevalence1[tissue.cancer == "cervical & endocervical cancer", tissue.cancer := "CESC"]
+prevalence1[tissue.cancer == "cholangiocarcinoma", tissue.cancer := "CHOL"]
+prevalence1[tissue.cancer == "chronic myelogenous leukemia", tissue.cancer := "LCML"]
+prevalence1[tissue.cancer == "colon adenocarcinoma", tissue.cancer := "COAD"]
+prevalence1[tissue.cancer == "controls", tissue.cancer := "CNTL"]
+prevalence1[tissue.cancer == "esophageal carcinoma", tissue.cancer := "ESCA"]
+prevalence1[tissue.cancer == "glioblastoma multiforme", tissue.cancer := "GBM"]
+prevalence1[tissue.cancer == "head & neck squamous cell carcinoma", tissue.cancer := "HNSC"]
+prevalence1[tissue.cancer == "kidney chromophobe", tissue.cancer := "KICH"]
+prevalence1[tissue.cancer == "kidney clear cell carcinoma", tissue.cancer := "KIRC"]
+prevalence1[tissue.cancer == "kidney papillary cell carcinoma", tissue.cancer := "KIRP"]
+prevalence1[tissue.cancer == "liver hepatocellular carcinoma", tissue.cancer := "LIHC"]
+prevalence1[tissue.cancer == "lung adenocarcinoma", tissue.cancer := "LUAD"]
+prevalence1[tissue.cancer == "lung squamous cell carcinoma", tissue.cancer := "LUSC"]
+prevalence1[tissue.cancer == "diffuse large B-cell lymphoma", tissue.cancer := "DLBC"]
+prevalence1[tissue.cancer == "mesothelioma", tissue.cancer := "MESO"]
+prevalence1[tissue.cancer == "miscellaneous", tissue.cancer := "MISC"]
+prevalence1[tissue.cancer == "ovarian serous cystadenocarcinoma", tissue.cancer := "OV"]
+prevalence1[tissue.cancer == "pancreatic adenocarcinoma", tissue.cancer := "PAAD"]
+prevalence1[tissue.cancer == "pheochromocytoma & paraganglioma", tissue.cancer := "PCPG"]
+prevalence1[tissue.cancer == "prostate adenocarcinoma", tissue.cancer := "PRAD"]
+prevalence1[tissue.cancer == "rectum adenocarcinoma", tissue.cancer := "READ"]
+prevalence1[tissue.cancer == "sarcoma", tissue.cancer := "SARC"]
+prevalence1[tissue.cancer == "skin cutaneous melanoma", tissue.cancer := "SKCM"]
+prevalence1[tissue.cancer == "stomach adenocarcinoma", tissue.cancer := "STAD"]
+prevalence1[tissue.cancer == "testicular germ cell tumor", tissue.cancer := "TGCT"]
+prevalence1[tissue.cancer == "thymoma", tissue.cancer := "THYM"]
+prevalence1[tissue.cancer == "thyroid carcinoma", tissue.cancer := "THCA"]
+prevalence1[tissue.cancer == "uterine carcinosarcoma", tissue.cancer := "UCS"]
+prevalence1[tissue.cancer == "uterine corpus endometrioid carcinoma", tissue.cancer := "UCEC"]
+prevalence1[tissue.cancer == "uveal melanoma", tissue.cancer := "UVM"]
+```
+
+```{r, fig.width=8, fig.height=6}
+fig2 <- ggplot(normal, aes(x=tissue.cancer, y=(TPM), colour=Risk))+
+        # geom_violin(trim=FALSE)+
+        geom_boxplot(fill="white", outlier.color=NA, alpha=0.8)+
+        geom_jitter(width=0.2, size=0.2, alpha=0.5)+
+        labs(y="TPM")+
+        # geom_hline(yintercept = 10, linetype = "dotted", colour = "purple")+
+        geom_hline(yintercept = cutoff, linetype = "dashed", colour = "brown")+
+        scale_colour_manual(name="Tissue risk categories", values=c("high"="red", "medium"="orange", "low"="darkgreen", "Immunoprivileged"="blue"))+
+        ggtitle(paste(target, "expression on normal tissues"))+
+        theme_bw()+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust =1),
+              axis.title.x= element_blank(),
+              plot.title = element_text(hjust = 0.5),
+              axis.text.y = element_text(size=10),
+              legend.position = "bottom")
+        
+fig2
+```
+
+### Tumour tissues
+```{r, fig.width=8, fig.height=6}
+tumour <- rna[type=="cancer"]
+
+# indication
+tumour[tissue.cancer == "acute myeloid leukemia", tissue.cancer := "LAML"]
+tumour[tissue.cancer == "adrenocortical cancer", tissue.cancer := "ACC"]
+tumour[tissue.cancer == "bladder urothelial carcinoma", tissue.cancer := "BLCA"]
+tumour[tissue.cancer == "brain lower grade glioma", tissue.cancer := "LGG"]
+tumour[tissue.cancer == "breast invasive carcinoma", tissue.cancer := "BRCA"]
+tumour[tissue.cancer == "cervical & endocervical cancer", tissue.cancer := "CESC"]
+tumour[tissue.cancer == "cholangiocarcinoma", tissue.cancer := "CHOL"]
+tumour[tissue.cancer == "chronic myelogenous leukemia", tissue.cancer := "LCML"]
+tumour[tissue.cancer == "colon adenocarcinoma", tissue.cancer := "COAD"]
+tumour[tissue.cancer == "controls", tissue.cancer := "CNTL"]
+tumour[tissue.cancer == "esophageal carcinoma", tissue.cancer := "ESCA"]
+tumour[tissue.cancer == "glioblastoma multiforme", tissue.cancer := "GBM"]
+tumour[tissue.cancer == "head & neck squamous cell carcinoma", tissue.cancer := "HNSC"]
+tumour[tissue.cancer == "kidney chromophobe", tissue.cancer := "KICH"]
+tumour[tissue.cancer == "kidney clear cell carcinoma", tissue.cancer := "KIRC"]
+tumour[tissue.cancer == "kidney papillary cell carcinoma", tissue.cancer := "KIRP"]
+tumour[tissue.cancer == "liver hepatocellular carcinoma", tissue.cancer := "LIHC"]
+tumour[tissue.cancer == "lung adenocarcinoma", tissue.cancer := "LUAD"]
+tumour[tissue.cancer == "lung squamous cell carcinoma", tissue.cancer := "LUSC"]
+tumour[tissue.cancer == "diffuse large B-cell lymphoma", tissue.cancer := "DLBC"]
+tumour[tissue.cancer == "mesothelioma", tissue.cancer := "MESO"]
+tumour[tissue.cancer == "miscellaneous", tissue.cancer := "MISC"]
+tumour[tissue.cancer == "ovarian serous cystadenocarcinoma", tissue.cancer := "OV"]
+tumour[tissue.cancer == "pancreatic adenocarcinoma", tissue.cancer := "PAAD"]
+tumour[tissue.cancer == "pheochromocytoma & paraganglioma", tissue.cancer := "PCPG"]
+tumour[tissue.cancer == "prostate adenocarcinoma", tissue.cancer := "PRAD"]
+tumour[tissue.cancer == "rectum adenocarcinoma", tissue.cancer := "READ"]
+tumour[tissue.cancer == "sarcoma", tissue.cancer := "SARC"]
+tumour[tissue.cancer == "skin cutaneous melanoma", tissue.cancer := "SKCM"]
+tumour[tissue.cancer == "stomach adenocarcinoma", tissue.cancer := "STAD"]
+tumour[tissue.cancer == "testicular germ cell tumor", tissue.cancer := "TGCT"]
+tumour[tissue.cancer == "thymoma", tissue.cancer := "THYM"]
+tumour[tissue.cancer == "thyroid carcinoma", tissue.cancer := "THCA"]
+tumour[tissue.cancer == "uterine carcinosarcoma", tissue.cancer := "UCS"]
+tumour[tissue.cancer == "uterine corpus endometrioid carcinoma", tissue.cancer := "UCEC"]
+tumour[tissue.cancer == "uveal melanoma", tissue.cancer := "UVM"]
+
+temp <- tumour[, list(TPM_median=median(TPM, na.rm = T)), by=list(tissue.cancer)]
+
+tumour[, tissue.cancer := factor(tissue.cancer, levels=temp$tissue.cancer[order(temp$TPM_median)])]
+
+fig3 <- ggplot(tumour, aes(x=tissue.cancer, y=(TPM)))+
+        geom_boxplot(fill="white", outlier.color=NA, alpha=0.8)+
+        geom_jitter(width=0.2, size=0.2, alpha=0.5)+
+        # geom_hline(yintercept = 10, linetype = "dotted", colour = "purple")+
+        geom_hline(yintercept = cutoff, linetype = "dashed", colour = "brown")+
+        ylab("TPM")+
+        ggtitle(paste(target, "expression on tumour tissues"))+
+        theme_bw()+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+              axis.title.x= element_blank(),
+              plot.title = element_text(hjust = 0.5),
+              axis.text.y = element_text(size=10),
+              legend.position = "bottom")
+        
+fig3
+```
+
+## Cut-offs vs. Elevation {.tabset}
+### 10 TPM
+```{r, fig.height=5, fig.width=10}
+data.table::setnames(prevalence1, old = target, new = "Frq_above_cutoff")
+temp <- prevalence1[type == "normal"]
+temp[, tissue.cancer := factor(tissue.cancer, levels = temp$tissue.cancer[order(temp$Frq_above_cutoff)])]
+fig4.1 <- ggplot(data=temp, aes(x=tissue.cancer, y=Frq_above_cutoff, fill=Risk))+
+          geom_bar(stat="identity")+
+          labs(y="% above 10 TPM")+
+          scale_fill_manual(name="Tissue risk categories", values=c("high"="red", "medium"="orange", "low"="darkgreen", "Immunoprivileged"="blue"))+
+          ggtitle("Normal")+
+          theme_bw()+
+          theme(axis.text.x = element_text(size=9, angle = 45, hjust = 1, vjust = 1),
+                axis.title.x= element_blank(),
+                plot.title = element_text(hjust = 0.5),
+                axis.text.y = element_text(size=10),
+                legend.position = "bottom")
+plot(fig4.1)
+```
+
+```{r, fig.height=5, fig.width=10}
+temp <- prevalence1[type == "cancer"]
+temp[, tissue.cancer := factor(tissue.cancer, levels = temp$tissue.cancer[order(temp$Frq_above_cutoff)])]
+fig4.2 <- ggplot(data=temp, aes(x=tissue.cancer, y=Frq_above_cutoff))+
+          geom_bar(stat="identity", alpha=0.8)+
+          labs(y="% above 10 TPM")+
+          ggtitle("Tumour")+
+          geom_hline(yintercept = 20, linetype="dashed", colour="blue")+
+          theme_bw()+
+          theme(axis.text.x = element_text(size=8, angle = 45, hjust = 1, vjust = 1),
+                axis.title.x= element_blank(),
+                plot.title = element_text(hjust = 0.5),
+                axis.text.y = element_text(size=10),
+                legend.position = "bottom")
+
+plot(fig4.2)
+```
+
+### Target specific cutoff
+```{r, fig.height=5, fig.width=10}
+data.table::setnames(prevalence2, old = target, new = "Frq_above_cutoff")
+prevalence2[, Frq_above_cutoff := as.numeric(Frq_above_cutoff)]
+temp <- prevalence2[type == "normal"]
+temp[, tissue.cancer := factor(tissue.cancer, levels = temp$tissue.cancer[order(temp$Frq_above_cutoff)])]
+fig4.1 <- ggplot(data=temp, aes(x=tissue.cancer, y=Frq_above_cutoff, fill=Risk))+
+          geom_bar(stat="identity")+
+          labs(y="% above cut-off")+
+          scale_fill_manual(name="Tissue risk categories", values=c("high"="red", "medium"="orange", "low"="darkgreen", "Immunoprivileged"="blue"))+
+          ggtitle("Normal")+
+          theme_bw()+
+          theme(axis.text.x = element_text(size=9, angle = 45, hjust = 1, vjust = 1),
+                axis.title.x= element_blank(),
+                plot.title = element_text(hjust = 0.5),
+                axis.text.y = element_text(size=10),
+                legend.position = "bottom")
+plot(fig4.1)
+```
+
+```{r, fig.height=5, fig.width=10}
+temp <- prevalence2[type == "cancer"]
+temp[, tissue.cancer := factor(tissue.cancer, levels = temp$tissue.cancer[order(temp$Frq_above_cutoff)])]
+fig4.2 <- ggplot(data=temp, aes(x=tissue.cancer, y=Frq_above_cutoff))+
+          geom_bar(stat="identity", alpha=0.8)+
+          labs(y="% above cut-off")+
+          ggtitle("Tumour")+
+          geom_hline(yintercept = 20, linetype="dashed", colour="blue")+
+          theme_bw()+
+          theme(axis.text.x = element_text(size=8, angle = 45, hjust = 1, vjust = 1),
+                axis.title.x= element_blank(),
+                plot.title = element_text(hjust = 0.5),
+                axis.text.y = element_text(size=10),
+                legend.position = "bottom")
+
+plot(fig4.2)
+```
+
+## Appendices {.tabset}
+
+### R session info
+```{r, results='hold'}
+print(paste("R", getRversion()))
+print("-------------")
+for (package_name in sort(loadedNamespaces())) {
+    print(paste(package_name, packageVersion(package_name)))
+}
+```
