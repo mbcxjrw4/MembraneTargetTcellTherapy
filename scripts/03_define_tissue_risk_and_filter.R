@@ -126,6 +126,52 @@ tmp <- data.table::as.data.table(tmp)
 tmp[, Gene := factor(Gene, levels = colnames(freq.above.cutoff))]
 data.table::setorder(tmp, Gene)
 
+# 2.4. Percentage above max of normal
+for(i in membrane){
+    tmp <- normal[, c("Sample.ID", "type", "tissue.cancer", "Risk", i), with = F]
+    data.table::setnames(tmp, old = i, new = "TPM")
+    tmp[, TPM := (2^TPM - 0.001)]
+    threshold <- tmp[, list(abs_max=absolute_max(y=TPM, Risk=Risk, hi_f = 0.975, med_f = 0.9, lo_f = 0.75), rel_max=relevant_max(y=TPM, Risk=Risk, hi_f = 1, med_f = 0.9, lo_f = 0.8)), by=list(tissue.cancer)]
+    cutoff.adap <- min(quantile(threshold$rel_max, probs = 0.95), quantile(threshold$abs_max, probs = 0.95))
+    
+    res <- data.frame(Gene = i, Cutoff = cutoff.adap)
+    if(exists("membrane.cutoff")){
+        membrane.cutoff <- rbind(membrane.cutoff, res)
+    }else{
+        membrane.cutoff <- res
+    }
+    
+    rm(tmp, threshold, cutoff.adap, res)
+}
+
+# 2.3.2. Percentage above normal max
+for(i in membrane){
+    tmp <- rna[, c("Sample.ID", "type", "tissue.cancer", i), with = F]
+    data.table::setnames(tmp, old = i, new = "TPM")
+    tmp[, TPM := (2^TPM - 0.001)]
+    cutoff <- membrane.cutoff$Cutoff[membrane.cutoff$Gene == i]
+    freq <- tmp[, list(Frq_above_cutoff = (sum(TPM>=cutoff)/length(TPM)*100)), by=list(type, tissue.cancer)]
+    data.table::setnames(freq, old = "Frq_above_cutoff", new = i)
+    
+    if(exists("freq.above.normal.max")){
+        freq.above.normal.max <- merge(freq.above.normal.max, freq, by = c("type", "tissue.cancer"), all = T)
+    }else{
+        freq.above.normal.max <- freq
+    }
+    
+    rm(tmp, cutoff, freq)
+}
+
+freq.above.normal.max <- merge(sample.size, freq.above.normal.max, by = c("type", "tissue.cancer"))
+
+tmp2 <- data.table::melt(freq.above.normal.max, id.var = c("tissue.cancer"), variable.name = "Gene", value.name = "VALUE")
+tmp2 <- data.table::dcast(tmp2, Gene~tissue.cancer, value.var = "VALUE")
+tmp2 <- merge(membrane.cutoff, tmp2, by = "Gene", all = T)
+
+tmp2 <- data.table::as.data.table(tmp2)
+tmp2[, Gene := factor(Gene, levels = colnames(freq.above.cutoff))]
+data.table::setorder(tmp2, Gene)
+
 # 3. Result
 filename <- paste0("processed/freq_above_hard_cutoff.csv")
 if(!exists(filename)){
@@ -135,4 +181,9 @@ if(!exists(filename)){
 filename <- paste0("freq_above_target_specific_cutoff.csv")
 if(!exists(filename)){
     data.table::fwrite(tmp, file=filename)
+}
+
+filename <- paste0("freq_above_normal_max.csv")
+if(!exists(filename)){
+    data.table::fwrite(tmp2, file=filename)
 }
