@@ -5,3 +5,5 @@ medium <- c("Adrenal Gland", "Bladder", "Colon", "Kidney", "Pancreas", "Pituitar
 low <- c("Breast", "Cervix", "Fallopian Tube", "Ovary", "Salivary Gland", "Prostate", "Rectum", "Spleen", "Thymus", "Thyroid", "Uterus", "Endometrium", "Vagina")
 
 immunoprivileged <- c("Testis")
+
+tbd <- c("Lining of body cavities", "Bile duct", "Head and Neck region")
