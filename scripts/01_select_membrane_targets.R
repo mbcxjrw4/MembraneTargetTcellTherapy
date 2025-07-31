@@ -1,12 +1,11 @@
 # Import data
 # TSV files of data from protein subcellular localisation database COMPARTMENTS [https://compartments.jensenlab.org/Search] is brought into R.
-filePath1 <- "~/s-drive/TBI/DATA_ANALYSIS/TBI-2023-0078/1.membrane_antigen/"
+filePath1 <- "data/COMPARTMENT/"
 file1 <-  "human_compartment_experiments_full.tsv"
 experiments <- data.table::fread(file=paste0(filePath1, file1), check.names=FALSE, stringsAsFactors=F)
 
 file2 <-  "human_compartment_knowledge_full.tsv"
 knowledge <- data.table::fread(file=paste0(filePath1, file2), check.names=FALSE, stringsAsFactors=F)
-
 
 file3 <-  "human_compartment_predictions_full.tsv"
 predictions <- data.table::fread(file=paste0(filePath1, file3), check.names=FALSE, stringsAsFactors=F)
