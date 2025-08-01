@@ -18,6 +18,9 @@ fc_max_normal <- function(target){
 
 # overview plot
 plot_overview <- function(gene_list, expression_data){
+    # select Clean target gene
+    gene_list <- gene_list$Gene[gene_list$Recommendations == "Clean target"]
+    
     # % prevalence of potential target expression above target-specific threshold in tumours and normal tissues
     prevalence2 <- percentage_above_target_specific_cutoff(expression_data = expression_data)
 
