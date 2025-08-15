@@ -1,7 +1,7 @@
 extract_expression_data <- function(membrane_targets){
     # 1. load data
     # tsv.gz file of gene id and name is brought into R.
-    UCSC_Path <- "data/UCSC/"
+    UCSC_Path <- "data/rna/"
     file4 <- "TOIL-GTEX_TARGET_TCGA-ROW_DATA.tsv.gz"
     gene <- data.table::fread(file = paste0(UCSC_Path, file4), check.names=FALSE, stringsAsFactors=F)
 
