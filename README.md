@@ -17,12 +17,12 @@ This project provides an end-to-end R pipeline — now with an interactive **Shi
 ## 📁 Project Structure
 ```bash
 membrane-target-discovery/ 
-├── app.R # Shiny app interface 
+├── app.R    # Shiny app interface 
 ├── scripts/ # Modular R scripts for pipeline steps 
-├── data/ # Input data (e.g. COMPARTMENTS, expression) 
+├── data/    # Input data (e.g. COMPARTMENTS, expression) 
 ├── results/ # Auto-generated output files 
-├── config/ # Risk tier definitions, thresholds 
-├── docs/ # Method summary and figures 
+├── config/  # Risk tier definitions, thresholds 
+├── docs/    # Method summary and figures 
 ├── LICENSE 
 └── README.md # This file
 ```
